@@ -1,25 +1,18 @@
 // General Inputs
-const char* ssid = "Jovan'sVESCR";                              // network SSID (name)
-const char* pass = "vescisbetter";                          // network password (use for WPA, or use as key for WEP)
+const char* ssid = "yourvesc";                              // network SSID (name)
+const char* pass = "yourpassword";                          // network password (use for WPA, or use as key for WEP)
 
+const char* OTAssid = "homewifi";
+const char* OTApassword = "homepassword";
+
+const bool enableOTA = true;
 const bool enableUART = false;                         // set "true" if VESC is connected to UART. Makes strip laggy if not configured.
 
-const int datPinNum = 21;                              // GPIO pin connected to LED data line
+const int datPinNum = 21;                              // GPIO pin connected to LED data line D10 on ESP Nano
 const int master_brightness = 50;                      // Hard brightness limiter, (0-255). Independent of slider. Choose wisely! Make sure you have enough amps!
 
 const double stripLength = 90;                         // number of LEDs 
 const int breakPoint = 45;                             // index of first tail-light pixel
-
-
-
-// VESC Behavior Inputs
-const int idleBrightness = 30;                         // brightness percent when at idle (0 to 100). Dims lights when not riding
-const double idleThresholdMph = 1.5;                   // mph threshold to escape idle mode. 
-const double brakingSens = 0.4;                        // 0 to 1, brakelight sensitivity, 1 is sensitive, 0 is sluggish
-const bool brakeBlink = true;                          // quick blink animation when brakelights come on
-const int brakeBlink_ms = 50;                          // milliseconds. How fast blink occurs
-
-
 
 // Mode Inputs
 const double numRainbow = 2.0;                         // number of full rainbows distributed in stripLength
@@ -30,7 +23,12 @@ const int pts = 9;                                     // pts = modif / divBy. C
 const int numFiFl = 15;                                // number of "fireflies" added 8-20 are good values
 const int numConf = 7;                                 // number of colored speckles added for "Confetti" 4-10 are good values
 
-
+// VESC Behavior Inputs
+const int idleBrightness = 30;                         // brightness percent when at idle (0 to 100). Dims lights when not riding
+const double idleThresholdMph = 1.5;                   // mph threshold to escape idle mode. 
+const double brakingSens = 0.4;                        // 0 to 1, brakelight sensitivity, 1 is sensitive, 0 is sluggish
+const bool brakeBlink = true;                          // quick blink animation when brakelights come on
+const int brakeBlink_ms = 50;                          // milliseconds. How fast blink occurs
 
 // Startup Inputs
 const int bootMode = 8;                                // 0 to 12, wihich mode to start initlaize after OW power on

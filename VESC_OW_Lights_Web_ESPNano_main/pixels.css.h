@@ -76,6 +76,18 @@ ul ul ul { margin: 0;}
     height: 75px;
 }
 
+#otabutton {
+    border: none;
+    padding: 15px;
+    text-align: center;
+    font-size: 16pt;
+    margin: 10px;
+    cursor: pointer;
+    width:  110px;
+    height: 75px;
+    border-radius: 45%;
+}
+
 #onoffbutton {
     border: none;
     padding: 15px;
@@ -127,7 +139,15 @@ ul ul ul { margin: 0;}
     background: #aaaaaa;
 }
 
+.ota-selected {
+    background: #aaaaaa;
+}
+
 .onoff-not-selected {
+    background-color: #ffffff;
+}
+
+.ota-not-selected {
     background-color: #ffffff;
 }
 

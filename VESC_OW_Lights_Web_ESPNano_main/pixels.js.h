@@ -4,6 +4,7 @@ const char* pixels_js = R"=====(
 // Only one mode can be selected
 var mode = "";
 var onoff = false;
+var ota = false; 
 
 $(() => {
 
@@ -77,6 +78,19 @@ function onoff_toggle() {
     }
 }
 
+function ota_toggle() {
+    if (ota == true) {
+        ota = false;
+        $("#otabutton").removeClass('ota-selected');
+        $("#otabutton").addClass('ota-not-selected');
+    }
+    else {
+        ota = true;
+        $("#otabutton").removeClass('ota-not-selected');
+        $("#otabutton").addClass('ota-selected');
+    }
+}
+
 function apply() {
     // Read each of the values and create the url
     // mode is in variable mode
@@ -89,7 +103,12 @@ function apply() {
     if (onoff == true) {
         onoff_str = 1;
     }
-    url_string = "/set?mode="+mode+"&brightness="+brightness+"&onoff="+onoff_str+"&pickedcolor="+picked_color;
+    //ota
+    ota_str = 0;
+    if (ota == true) {
+        ota_str = 1;
+    }
+    url_string = "/set?mode="+mode+"&brightness="+brightness+"&onoff="+onoff_str+"&pickedcolor="+picked_color+"&ota="+ota_str;
     $.get( url_string, function (data) {
         $("#status").html(data);
     });

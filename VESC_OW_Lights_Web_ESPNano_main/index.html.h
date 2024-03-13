@@ -12,7 +12,7 @@ const char* index_html = R"=====(
         </head>
 
     <body>
-        <div id="divapplybuttons"><button type="button" id="applybutton" onclick="apply()">Apply</button><button type="button" id="onoffbutton" class="onoff-not-selected" onclick="onoff_toggle()">Turn Off</button></div>
+        <div id="divapplybuttons"><button type="button" id="applybutton" onclick="apply()">Apply</button><button type="button" id="onoffbutton" class="onoff-not-selected" onclick="onoff_toggle()">Turn Off</button> <button type="button" id="otabutton" class="ota-not-selected" onclick="ota_toggle()">OTA Mode</button></div>
         <div style="text-align:center" id="modes">
           <p></p>
           <h2>Modes</h2>

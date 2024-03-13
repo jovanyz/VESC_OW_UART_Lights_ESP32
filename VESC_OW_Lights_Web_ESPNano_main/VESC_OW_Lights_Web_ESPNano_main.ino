@@ -1,5 +1,9 @@
 // Libraries. Huge thanks to this guy https://www.penguintutor.com/projects/arduino-rp2040-pixelstrip as a lot this code is originally theirs.
-//#include <SPI.h>
+// OTA Libraries
+#include <ESPmDNS.h>
+#include <WiFiUdp.h>
+#include <ArduinoOTA.h>
+
 #include <WiFiClient.h>
 #include <WiFi.h>
 #include <Adafruit_NeoPixel.h>
@@ -49,9 +53,9 @@ VescUart vesc;
 // higher number the more debug messages
 // recommend level 1 (includes occassional messages)
 #define DEBUG 2
-#define LEDR 46
-#define LEDG 0
-#define LEDB 45
+#define LEDR 14
+#define LEDG 15
+#define LEDB 16
 #ifdef LED_BUILTIN
 #undef LED_BUILTIN
 #define LED_BUILTIN 48
@@ -99,12 +103,15 @@ bool braking = false;                      // true when rpm decel detected
 bool brakingFaded = true;                  // flag for transitions between brakelights and tail lights
 int brakingFadeSteps = 20;                 // 20 steps to fade to normal after braking
 int brakingFadeIndex = 0;                  // fade step index
+int bpIndex;
 
 bool dirFaded = true;                      // tracks changing direction red/white fading progress
 int fadeDir = 0;                           // requested fade direction
 int dirSet = 0;                            // which direction was just set as front -1 rev, 1 forw, 0 idle
 
 const double idleThresholdRpm = idleThresholdMph / (11.0 * PI * 60.0) * 63360.0 * 15.0;     // converts mph to erpm (15 for 30/2 motor poles)
+
+int OTAMode = 0;
 
 // Pattern Types (any new pattern must be added here):
 enum  pattern { NONE, STANDARD, RAINBOW, COLOR_WIPE, FADE, LAVA, CANOPY, OCEAN, ROLLING_WAVE, COLOR_WAVE, FIREFLIES, CONFETTI, COMET, PACMAN, TAIL_COLOR, PIXEL_FINDER};
@@ -253,18 +260,18 @@ class NeoPatterns : public Adafruit_NeoPixel
         dirSet = 0;
       } else if(rpmHist[0] >= 0 && dirFaded){                  // if forward & fade is correct 
         dirSet = 0;                                            // set direction check to finished
-        for(int i = 0; i < breakPoint; i++){                   // set nose color
+        for(int i = 0; i < bpIndex; i++){                   // set nose color
           setPixelColorIdleDim(i, DimColor(Color(cmdArr[2], cmdArr[3], cmdArr[4]), cmdArr[5]));
         } 
-        for(int i = breakPoint; i < numPixels(); i++){          // set tail red, brightness scaled to rpm
+        for(int i = bpIndex; i < numPixels(); i++){          // set tail red, brightness scaled to rpm
           setPixelColorIdleDim(i, Color(min(15.0 + 125.0 * pow(fabs(rpmHist[0]) / 6000.0, 2.0) , 255.0), 0, 0));
         } 
       } else if(rpmHist[0] < 0 && dirFaded){                    // if backward & fade is correct
         dirSet = 0;                                             // set direction check idle
-        for(int i = breakPoint; i < numPixels(); i++){          // set tail to color
+        for(int i = bpIndex; i < numPixels(); i++){          // set tail to color
           setPixelColorIdleDim(i, DimColor(Color(cmdArr[2], cmdArr[3], cmdArr[4]), cmdArr[5]));
         } 
-        for(int i = 0; i < breakPoint; i++){                    // set nose red, brightness scaled to rpm
+        for(int i = 0; i < bpIndex; i++){                    // set nose red, brightness scaled to rpm
           setPixelColorIdleDim(i, Color(min(15.0 + 125.0 * pow(fabs(rpmHist[0]) / 6000.0, 2.0) , 255.0), 0, 0));
         }
       } else{
@@ -274,14 +281,14 @@ class NeoPatterns : public Adafruit_NeoPixel
       if (!dirFaded) {                                          // if requested direction change
         Increment();                                            // start fade index count
         if(fadeDir == 1){                                       // if requested fade nose forward
-          for(int i = 0; i < breakPoint; i++){
+          for(int i = 0; i < bpIndex; i++){
             uint8_t red = min(60.0 * (double(TotalSteps - Index - 1)/double(TotalSteps)) 
                               + cmdArr[2] * (double(Index + 1)/double(TotalSteps)), 255.0);
             uint8_t green = cmdArr[3] * (double(Index + 1)/double(TotalSteps));
             uint8_t blue = cmdArr[4] * (double(Index + 1)/double(TotalSteps));
             setPixelColorIdleDim(i, DimColor(Color(red, green, blue), cmdArr[5]));
           }
-          for(int i = breakPoint; i < numPixels(); i++){
+          for(int i = bpIndex; i < numPixels(); i++){
             uint8_t red = min(cmdArr[2] * (double(TotalSteps - Index - 1)/double(TotalSteps)) 
                               + 60 * (double(Index + 1)/double(TotalSteps)), 255.0);
             uint8_t green = cmdArr[3] * (double(TotalSteps - Index - 1)/double(TotalSteps));
@@ -289,14 +296,14 @@ class NeoPatterns : public Adafruit_NeoPixel
             setPixelColorIdleDim(i, DimColor(Color(red, green, blue), cmdArr[5]));
           }
         } else if (fadeDir == -1){                               // if requested fade tail forward
-          for(int i = 0; i < breakPoint; i++){
+          for(int i = 0; i < bpIndex; i++){
             uint8_t red = min(cmdArr[2] * (double(TotalSteps - Index - 1)/double(TotalSteps)) 
                               + 60 * (double(Index + 1)/double(TotalSteps)), 255.0);
             uint8_t green = cmdArr[3] * (double(TotalSteps - Index - 1)/double(TotalSteps));
             uint8_t blue = cmdArr[4] * (double(TotalSteps - Index - 1)/double(TotalSteps));
             setPixelColorIdleDim(i, DimColor(Color(red, green, blue), cmdArr[5]));
           }
-          for(int i = breakPoint; i <numPixels(); i++){
+          for(int i = bpIndex; i <numPixels(); i++){
             uint8_t red = min(60 * (double(TotalSteps - Index - 1)/double(TotalSteps)) 
                               + cmdArr[2] * (double(Index + 1)/double(TotalSteps)), 255.0);
             uint8_t green = cmdArr[3] * (double(Index + 1)/double(TotalSteps));
@@ -744,12 +751,12 @@ class NeoPatterns : public Adafruit_NeoPixel
 
     void PacManUpdate(){
       if (rpmHist[0] < 0){
-        ColorSetRange(DimColor(Color(cmdArr[2], cmdArr[3], cmdArr[4]), cmdArr[5]), breakPoint, numPixels());
-        for(int i = 0; i < breakPoint - 1; i++){
+        ColorSetRange(DimColor(Color(cmdArr[2], cmdArr[3], cmdArr[4]), cmdArr[5]), bpIndex, numPixels());
+        for(int i = 0; i < bpIndex - 1; i++){
           if(i % 5 == Index){
-            setPixelColor(breakPoint - (i + 1), Color(25, 25, 10));
+            setPixelColor(bpIndex - (i + 1), Color(25, 25, 10));
           }else{
-            setPixelColor(breakPoint - (i + 1), Color(0, 0, 0));
+            setPixelColor(bpIndex - (i + 1), Color(0, 0, 0));
           }
         }
         if(Index % 4 == 0 || Index % 4 == 1){
@@ -758,19 +765,19 @@ class NeoPatterns : public Adafruit_NeoPixel
           setPixelColor(0, Color(0, 0, 0));
         }
       } else {
-        ColorSetRange(DimColor(Color(cmdArr[2], cmdArr[3], cmdArr[4]), cmdArr[5]), 0, breakPoint);
-        for(int i = breakPoint; i < numPixels() -  1; i++){
+        ColorSetRange(DimColor(Color(cmdArr[2], cmdArr[3], cmdArr[4]), cmdArr[5]), 0, bpIndex);
+        for(int i = bpIndex; i < numPixels() -  1; i++){
           if(i % 5 == Index){
-            setPixelColor(breakPoint + numPixels() - (i + 1), Color(25, 25, 10));
+            setPixelColor(bpIndex + numPixels() - (i + 1), Color(25, 25, 10));
           }else{
-            setPixelColor(breakPoint + numPixels() - (i + 1), Color(0, 0, 0));
+            setPixelColor(bpIndex + numPixels() - (i + 1), Color(0, 0, 0));
           }
         }
 
         if(Index % 4 == 0 || Index % 4 == 1){
-          setPixelColor(breakPoint, Color(255, 168, 0));
+          setPixelColor(bpIndex, Color(255, 168, 0));
         } else {
-          setPixelColor(breakPoint, Color(0, 0, 0));
+          setPixelColor(bpIndex, Color(0, 0, 0));
         }
       }
 
@@ -790,17 +797,17 @@ class NeoPatterns : public Adafruit_NeoPixel
 
     void TailColorUpdate(){
       if(rpmHist[0] < 0){
-        for(int i = 0; i < breakPoint; i++){
+        for(int i = 0; i < bpIndex; i++){
           setPixelColorIdleDim(i, DimColor(Color(cmdArr[2], cmdArr[3], cmdArr[4]), cmdArr[5]));
         }
-        for(int i = breakPoint; i < numPixels(); i++){
+        for(int i = bpIndex; i < numPixels(); i++){
           setPixelColorIdleDim(i, DimColor(Color(255, 255, 255), cmdArr[5]));
         }
       }else{
-        for(int i = 0; i < breakPoint; i++){
+        for(int i = 0; i < bpIndex; i++){
           setPixelColorIdleDim(i, DimColor(Color(255, 255, 255), cmdArr[5]));
         }
-        for(int i = breakPoint; i < numPixels(); i++){
+        for(int i = bpIndex; i < numPixels(); i++){
           setPixelColorIdleDim(i, DimColor(Color(cmdArr[2], cmdArr[3], cmdArr[4]), cmdArr[5]));
         }
       }
@@ -850,33 +857,33 @@ class NeoPatterns : public Adafruit_NeoPixel
       if (braking) {
         if(brakingFaded && brakeBlink){       // first frame of braking
           if (rpmHist[0] < 0){
-            for(int i = 0; i < breakPoint; i++){
+            for(int i = 0; i < bpIndex; i++){
               setPixelColor(i, Color(0, 0, 0));
             }
             show();
             delay(brakeBlink_ms);
-            for(int i = 0; i < breakPoint; i++){
+            for(int i = 0; i < bpIndex; i++){
               setPixelColor(i, Color(255, 0, 0));
             }
             show();
             delay(brakeBlink_ms);
-            for(int i = 0; i < breakPoint; i++){
+            for(int i = 0; i < bpIndex; i++){
               setPixelColor(i, Color(0, 0, 0));
             }
             show();
             delay(brakeBlink_ms);
           } else {
-            for(int i = breakPoint; i < numPixels(); i++){
+            for(int i = bpIndex; i < numPixels(); i++){
               setPixelColor(i, Color(0, 0, 0));
             }
             show();
             delay(brakeBlink_ms);
-            for(int i = breakPoint; i < numPixels(); i++){
+            for(int i = bpIndex; i < numPixels(); i++){
               setPixelColor(i, Color(255, 0, 0));
             }
             show();
             delay(brakeBlink_ms);
-            for(int i = breakPoint; i < numPixels(); i++){
+            for(int i = bpIndex; i < numPixels(); i++){
               setPixelColor(i, Color(0, 0, 0));
             }
             show();
@@ -886,24 +893,24 @@ class NeoPatterns : public Adafruit_NeoPixel
 
         brakingFaded = false;
         if (rpmHist[0] < 0){
-          for(int i = 0; i < breakPoint; i++){
+          for(int i = 0; i < bpIndex; i++){
             setPixelColor(i, Color(255, 0, 0));
           }
         } else {
-          for(int i = breakPoint; i < numPixels(); i++){
+          for(int i = bpIndex; i < numPixels(); i++){
             setPixelColor(i, Color(255, 0, 0));
           } 
         }
       } else if (!brakingFaded && !braking) {         // first "frame" after braking is no longer detected
         if (rpmHist[0] >= 0){
-          for (int i = breakPoint; i < numPixels(); i++){
+          for (int i = bpIndex; i < numPixels(); i++){
             uint8_t red = min(255 * (double(brakingFadeSteps - brakingFadeIndex) / double(brakingFadeSteps)) + Red(getPixelColor(i)), 255.0);
             uint8_t green = Green(getPixelColor(i)) * (double(brakingFadeIndex) / double(brakingFadeSteps));
             uint8_t blue = Blue(getPixelColor(i)) * (double(brakingFadeIndex) / double(brakingFadeSteps));
             setPixelColor(i, Color(red, green, blue));
           }
         } else if (rpmHist[0] < 0){
-          for (int i = 0; i < breakPoint; i++){
+          for (int i = 0; i < bpIndex; i++){
             uint8_t red = min(255 * (double(brakingFadeSteps - brakingFadeIndex) / double(brakingFadeSteps)) + Red(getPixelColor(i)), 255.0);
             uint8_t green = Green(getPixelColor(i)) * (double(brakingFadeIndex) / double(brakingFadeSteps));
             uint8_t blue = Blue(getPixelColor(i)) * (double(brakingFadeIndex) / double(brakingFadeSteps));
@@ -921,14 +928,14 @@ class NeoPatterns : public Adafruit_NeoPixel
     //Called by some modes, rescales colors to add more red to "tail" lights
     void TailTint(){
       if (rpmHist[0] < 0){
-        for(int i = 0; i < breakPoint; i++){
+        for(int i = 0; i < bpIndex; i++){
           int r = min(10 + 1.5 * double(Red(getPixelColor(i))), 255.0);
           int g = 0.3 * double(Green(getPixelColor(i)));
           int b = 0.3 * double(Blue(getPixelColor(i)));
           setPixelColor(i, Color(r, g, b));
         }
       } else {
-        for(int i = breakPoint; i < numPixels(); i++){
+        for(int i = bpIndex; i < numPixels(); i++){
           int r = min(10 + 1.5 * double(Red(getPixelColor(i))), 255.0);
           int g = 0.3 * double(Green(getPixelColor(i)));
           int b = 0.3 * double(Blue(getPixelColor(i)));
@@ -1139,7 +1146,7 @@ void Transition() {
       {
         if (vescDir == -1){
           for (int  i = 0; i < trSteps; i++) {
-            for (int j = breakPoint; j < Strip.numPixels(); j++) {
+            for (int j = bpIndex; j < Strip.numPixels(); j++) {
               uint32_t col = Strip.DimColor(Strip.Color(cmdArr[2], cmdArr[3], cmdArr[4]), cmdArr[5]);
               uint8_t red = ((Strip.Red(Strip.getPixelColor(j)) * (trSteps - i)) + (Strip.Red(col) * i)) / trSteps;
               uint8_t green = ((Strip.Green(Strip.getPixelColor(j)) * (trSteps - i)) + (Strip.Green(col) * i)) / trSteps;
@@ -1147,7 +1154,7 @@ void Transition() {
 
               Strip.setPixelColorIdleDim(j, (Strip.DimColor(Strip.Color(red, green, blue), cmdArr[5])));
             }
-            for (int j = 0; j < breakPoint; j++) {
+            for (int j = 0; j < bpIndex; j++) {
               uint32_t col = Strip.DimColor(Strip.Color(20, 0, 0), cmdArr[5]);
               uint8_t red = ((Strip.Red(Strip.getPixelColor(j)) * (trSteps - i)) + (Strip.Red(col) * i)) / trSteps;
               uint8_t green = ((Strip.Green(Strip.getPixelColor(j)) * (trSteps - i)) + (Strip.Green(col) * i)) / trSteps;
@@ -1160,7 +1167,7 @@ void Transition() {
           }
         } else {
           for (int  i = 0; i < trSteps; i++) {
-            for (int j = 0; j < breakPoint; j++) {
+            for (int j = 0; j < bpIndex; j++) {
               uint32_t col = Strip.DimColor(Strip.Color(cmdArr[2], cmdArr[3], cmdArr[4]), cmdArr[5]);
               uint8_t red = ((Strip.Red(Strip.getPixelColor(j)) * (trSteps - i)) + (Strip.Red(col) * i)) / trSteps;
               uint8_t green = ((Strip.Green(Strip.getPixelColor(j)) * (trSteps - i)) + (Strip.Green(col) * i)) / trSteps;
@@ -1168,7 +1175,7 @@ void Transition() {
 
               Strip.setPixelColorIdleDim(j, (Strip.DimColor(Strip.Color(red, green, blue), cmdArr[5])));
             }
-            for (int j = breakPoint; j < Strip.numPixels(); j++) {
+            for (int j = bpIndex; j < Strip.numPixels(); j++) {
               uint32_t col = Strip.DimColor(Strip.Color(20, 0, 0), cmdArr[5]);
               uint8_t red = ((Strip.Red(Strip.getPixelColor(j)) * (trSteps - i)) + (Strip.Red(col) * i)) / trSteps;
               uint8_t green = ((Strip.Green(Strip.getPixelColor(j)) * (trSteps - i)) + (Strip.Green(col) * i)) / trSteps;
@@ -1380,14 +1387,14 @@ void Transition() {
       {
         for (int  i = 0; i < trSteps; i++) {
           if (rpmHist[0] < 0){
-            for (int j = breakPoint; j < Strip.numPixels(); j++) {
+            for (int j = bpIndex; j < Strip.numPixels(); j++) {
               uint8_t red = (Strip.Red(Strip.getPixelColor(j)) * (trSteps - i) + cmdArr[2] * i) / trSteps;
               uint8_t green = (Strip.Green(Strip.getPixelColor(j)) * (trSteps - i) + cmdArr[3] * i) / trSteps;
               uint8_t blue = (Strip.Blue(Strip.getPixelColor(j)) * (trSteps - i) + cmdArr[4] * i) / trSteps;
 
               Strip.setPixelColorIdleDim(j, Strip.DimColor(Strip.Color(red, green, blue), cmdArr[5]));
             }
-            for (int j = 1; j < breakPoint; j++) {
+            for (int j = 1; j < bpIndex; j++) {
               uint8_t red = (Strip.Red(Strip.getPixelColor(j)) * (trSteps - i)) / trSteps;
               uint8_t green = (Strip.Green(Strip.getPixelColor(j)) * (trSteps - i)) / trSteps;
               uint8_t blue = (Strip.Blue(Strip.getPixelColor(j)) * (trSteps - i)) / trSteps;
@@ -1395,14 +1402,14 @@ void Transition() {
               Strip.setPixelColorIdleDim(j, Strip.DimColor(Strip.Color(red, green, blue), cmdArr[5]));
             }
           } else {
-            for (int j = 0; j < breakPoint; j++) {
+            for (int j = 0; j < bpIndex; j++) {
               uint8_t red = (Strip.Red(Strip.getPixelColor(j)) * (trSteps - i) + cmdArr[2] * i) / trSteps;
               uint8_t green = (Strip.Green(Strip.getPixelColor(j)) * (trSteps - i) + cmdArr[3] * i) / trSteps;
               uint8_t blue = (Strip.Blue(Strip.getPixelColor(j)) * (trSteps - i) + cmdArr[4] * i) / trSteps;
 
               Strip.setPixelColorIdleDim(j, Strip.DimColor(Strip.Color(red, green, blue), cmdArr[5]));
             }
-            for (int j = breakPoint + 1; j <Strip.numPixels(); j++) {
+            for (int j = bpIndex + 1; j <Strip.numPixels(); j++) {
               uint8_t red = (Strip.Red(Strip.getPixelColor(j)) * (trSteps - i)) / trSteps;
               uint8_t green = (Strip.Green(Strip.getPixelColor(j)) * (trSteps - i)) / trSteps;
               uint8_t blue = (Strip.Blue(Strip.getPixelColor(j)) * (trSteps - i)) / trSteps;
@@ -1416,10 +1423,10 @@ void Transition() {
             uint8_t bluePM = (Strip.Blue(Strip.getPixelColor(0)) * (trSteps - i)) / trSteps;
             Strip.setPixelColorIdleDim(0, (Strip.Color(redPM, greenPM, bluePM)));
           }else{
-            uint8_t redPM = (Strip.Red(Strip.getPixelColor(breakPoint)) * (trSteps - i) + 255 * i) / trSteps;
-            uint8_t greenPM = (Strip.Green(Strip.getPixelColor(breakPoint)) * (trSteps - i) + 168 * i) / trSteps;
-            uint8_t bluePM = (Strip.Blue(Strip.getPixelColor(breakPoint)) * (trSteps - i)) / trSteps;
-            Strip.setPixelColorIdleDim(breakPoint, (Strip.Color(redPM, greenPM, bluePM)));
+            uint8_t redPM = (Strip.Red(Strip.getPixelColor(bpIndex)) * (trSteps - i) + 255 * i) / trSteps;
+            uint8_t greenPM = (Strip.Green(Strip.getPixelColor(bpIndex)) * (trSteps - i) + 168 * i) / trSteps;
+            uint8_t bluePM = (Strip.Blue(Strip.getPixelColor(bpIndex)) * (trSteps - i)) / trSteps;
+            Strip.setPixelColorIdleDim(bpIndex, (Strip.Color(redPM, greenPM, bluePM)));
           }
           Strip.show();
           delay(20);
@@ -1429,26 +1436,26 @@ void Transition() {
       {
         for (int  i = 0; i < trSteps; i++) {
           if (rpmHist[0] < 0){
-            for (int j = 0; j < breakPoint; j++) {
+            for (int j = 0; j < bpIndex; j++) {
               uint8_t red = (Strip.Red(Strip.getPixelColor(0)) * (trSteps - i) + 255 * i) / trSteps;
               uint8_t green = (Strip.Green(Strip.getPixelColor(0)) * (trSteps - i) + 255 * i) / trSteps;
               uint8_t blue = (Strip.Blue(Strip.getPixelColor(0)) * (trSteps - i) + 255 * i) / trSteps;
               Strip.setPixelColorIdleDim(0, (Strip.Color(red, green, blue)));
             }
-            for (int j = breakPoint; j < Strip.numPixels(); j++) {
+            for (int j = bpIndex; j < Strip.numPixels(); j++) {
               uint8_t red = (Strip.Red(Strip.getPixelColor(0)) * (trSteps - i) + cmdArr[2] * i) / trSteps;
               uint8_t green = (Strip.Green(Strip.getPixelColor(0)) * (trSteps - i) + cmdArr[3] * i) / trSteps;
               uint8_t blue = (Strip.Blue(Strip.getPixelColor(0)) * (trSteps - i) + cmdArr[4] * i) / trSteps;
               Strip.setPixelColorIdleDim(0, (Strip.Color(red, green, blue)));
             }
           }else{
-            for (int j = 0; j < breakPoint; j++) {
+            for (int j = 0; j < bpIndex; j++) {
               uint8_t red = (Strip.Red(Strip.getPixelColor(0)) * (trSteps - i) + cmdArr[2] * i) / trSteps;
               uint8_t green = (Strip.Green(Strip.getPixelColor(0)) * (trSteps - i) + cmdArr[3] * i) / trSteps;
               uint8_t blue = (Strip.Blue(Strip.getPixelColor(0)) * (trSteps - i) + cmdArr[4] * i) / trSteps;
               Strip.setPixelColorIdleDim(j, (Strip.Color(red, green, blue)));
             }
-            for (int j = breakPoint; j < Strip.numPixels(); j++) {
+            for (int j = bpIndex; j < Strip.numPixels(); j++) {
               uint8_t red = (Strip.Red(Strip.getPixelColor(0)) * (trSteps - i) + 255 * i) / trSteps;
               uint8_t green = (Strip.Green(Strip.getPixelColor(0)) * (trSteps - i) + 255 * i) / trSteps;
               uint8_t blue = (Strip.Blue(Strip.getPixelColor(0)) * (trSteps - i) + 255 * i) / trSteps;
@@ -1751,14 +1758,6 @@ void handleWiFiUpdates(){
   if (status != WiFi.status()) {
     // it has changed update the variable
     status = WiFi.status();
-
-    /*if (status == WL_AP_CONNECTED) {
-      // a device has connected to the AP
-      Serial.println("Device connected to AP");
-    } else {
-      // a device has disconnected from the AP, and we are back in listening mode
-      Serial.println("Device disconnected from AP");
-    }*/
   }
 
 
@@ -1907,6 +1906,10 @@ void handleWiFiUpdates(){
                     if (arg_value == "0") OnOff = true;
                     else if (arg_value == "1") OnOff = false;
                   }
+                  else if (arg_name == "ota"){
+                    if (arg_value == "0") OTAMode = 0;
+                    else if (arg_value == "1") OTAMode = 1;
+                  }
                   else if (arg_name == "pickedcolor") {
                         read_colors (arg_value);
                       // If no colors then set to default (1 white)
@@ -2036,71 +2039,127 @@ void printWifiStatus() {
 // 8. ==================================================================== ARDUINO MAIN LOOP ========================================================================================
 
 void setup() {
-  pinMode(LEDR, OUTPUT);
-  pinMode(LEDG, OUTPUT);
-  pinMode(LEDB, OUTPUT);
+  if(OTAMode && enableOTA){
+    Serial.flush();
+    Serial.begin(115200);
+    Serial.println("Booting");
+    WiFi.mode(WIFI_STA);
+    WiFi.begin(OTAssid, OTApassword);
+    while (WiFi.waitForConnectResult() != WL_CONNECTED) {
+      Serial.println("Connection Failed! Rebooting...");
+      delay(5000);
+      ESP.restart();
+    }
 
-  //boot up command states
-  cmdArr[0] = 1;            // 0 - off, 1 - on
-  cmdArr[1] = bootMode;            // modes 0 - 13
-  cmdArr[2] = bootRed;          // red
-  cmdArr[3] = bootGreen;          // green
-  cmdArr[4] = bootBlue;          // blue
-  cmdArr[5] = bootBrightness;           // brightness slider value
+    // Port defaults to 3232
+    // ArduinoOTA.setPort(3232);
 
-  usrColor[0] = cmdArr[2];
-  usrColor[1] = cmdArr[3];  // initalize user set color
-  usrColor[2] = cmdArr[4];  
+    // Hostname defaults to esp3232-[MAC]
+    // ArduinoOTA.setHostname("myesp32");
 
-  Serial.begin(9600);       
+    // No authentication by default
+    // ArduinoOTA.setPassword("admin");
 
- // check for the WiFi module:
-  /*if (WiFi.status() == WL_NO_MODULE) {
-    Serial.println("Communication with WiFi module failed!");
-    // don't continue
-    while (true);
-  }*/
+    // Password can be set with it's md5 value as well
+    // MD5(admin) = 21232f297a57a5a743894a0e4a801fc3
+    // ArduinoOTA.setPasswordHash("21232f297a57a5a743894a0e4a801fc3");
 
-  // print the network name (SSID);
-  Serial.print("Creating access point named: ");
-  Serial.println(ssid);
+    ArduinoOTA
+      .onStart([]() {
+        String type;
+        if (ArduinoOTA.getCommand() == U_FLASH)
+          type = "sketch";
+        else // U_SPIFFS
+          type = "filesystem";
 
-  // Create open network. Change this line if you want to create an WEP network:
-  if (!WiFi.softAP(ssid, pass)) {
-    log_e("Soft AP creation failed.");
-    while(1);
-  }
-  IPAddress myIP = WiFi.softAPIP();
-  //status = WiFi.begin(ssid, pass);
-  /*if (status != WL_AP_LISTENING) {
-    Serial.println("Creating access point failed");
-    // don't continue
-    while (true);
-  }*/
+        // NOTE: if updating SPIFFS this would be the place to unmount SPIFFS using SPIFFS.end()
+        Serial.println("Start updating " + type);
+      })
+      .onEnd([]() {
+        Serial.println("\nEnd");
+      })
+      .onProgress([](unsigned int progress, unsigned int total) {
+        Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
+      })
+      .onError([](ota_error_t error) {
+        Serial.printf("Error[%u]: ", error);
+        if (error == OTA_AUTH_ERROR) Serial.println("Auth Failed");
+        else if (error == OTA_BEGIN_ERROR) Serial.println("Begin Failed");
+        else if (error == OTA_CONNECT_ERROR) Serial.println("Connect Failed");
+        else if (error == OTA_RECEIVE_ERROR) Serial.println("Receive Failed");
+        else if (error == OTA_END_ERROR) Serial.println("End Failed");
+      });
+
+    ArduinoOTA.begin();
+
+    Serial.println("Ready");
+    Serial.print("IP address: ");
+    Serial.println(WiFi.localIP());
+  } 
   
-  // wait 100 ms for connection:
-  delay(100);
+  else {
+    bpIndex = breakPoint + 1;
+    pinMode(LEDR, OUTPUT);
+    pinMode(LEDG, OUTPUT);
+    pinMode(LEDB, OUTPUT);
 
-  server.begin();                           // start the web server on port 80
-  if (DEBUG > 0) printWifiStatus();         // you're connected now, so print out the status
+    //boot up command states
+    cmdArr[0] = 1;            // 0 - off, 1 - on
+    cmdArr[1] = bootMode;            // modes 0 - 13
+    cmdArr[2] = bootRed;          // red
+    cmdArr[3] = bootGreen;          // green
+    cmdArr[4] = bootBlue;          // blue
+    cmdArr[5] = bootBrightness;           // brightness slider value
 
-  Serial1.begin(115200);                    // VESC UART data
-  vesc.setSerialPort(&Serial1);
+    usrColor[0] = cmdArr[2];
+    usrColor[1] = cmdArr[3];  // initalize user set color
+    usrColor[2] = cmdArr[4];  
 
-  // initialize pixels
-  //Strip.Color1 = Strip.Wheel(random(255));
-  Strip.Color2 = Strip.Wheel(random(255));
-  Strip.begin();
-  Strip.setBrightness(master_brightness);   // Set hard brightness limiter
-  ControlPanel();
-  Strip.show();
+    Serial.begin(9600);       
+
+    // print the network name (SSID);
+    Serial.print("Creating access point named: ");
+    Serial.println(ssid);
+
+    // Create open network. Change this line if you want to create an WEP network:
+    if (!WiFi.softAP(ssid, pass)) {
+      log_e("Soft AP creation failed.");
+      while(1);
+    }
+    IPAddress myIP = WiFi.softAPIP();
+    
+    // wait 100 ms for connection:
+    delay(100);
+
+    server.begin();                           // start the web server on port 80
+    if (DEBUG > 0) printWifiStatus();         // you're connected now, so print out the status
+
+    Serial1.begin(115200);                    // VESC UART data
+    vesc.setSerialPort(&Serial1);
+
+    // initialize pixels
+    //Strip.Color1 = Strip.Wheel(random(255));
+    Strip.Color2 = Strip.Wheel(random(255));
+    Strip.begin();
+    Strip.setBrightness(master_brightness);   // Set hard brightness limiter
+    ControlPanel();
+    Strip.show();
+  }
 }
 
 
 
 void loop() {
-  handleWiFiUpdates();
-  getVescData();
-  Strip.Update();
+  if(enableOTA && OTAMode == 1){
+    OTAMode = 2;
+    setup();
+  } else if(enableOTA && OTAMode == 2){
+    ArduinoOTA.handle();
+  }
+  else { 
+    handleWiFiUpdates();
+    getVescData();
+    Strip.Update();
+  }
 }
 
