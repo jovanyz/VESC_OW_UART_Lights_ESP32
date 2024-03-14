@@ -2134,8 +2134,8 @@ void setup() {
     server.begin();                           // start the web server on port 80
     if (DEBUG > 0) printWifiStatus();         // you're connected now, so print out the status
 
-    Serial1.begin(115200);                    // VESC UART data
-    vesc.setSerialPort(&Serial1);
+    Serial0.begin(115200);                    // VESC UART data
+    vesc.setSerialPort(&Serial0);
 
     // initialize pixels
     //Strip.Color1 = Strip.Wheel(random(255));
