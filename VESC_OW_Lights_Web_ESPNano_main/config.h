@@ -14,6 +14,8 @@ const int master_brightness = 50;                      // Hard brightness limite
 const double stripLength = 90;                         // number of LEDs 
 const int breakPoint = 45;                             // index of first tail-light pixel
 
+const double sCells = 18;                              // Battery cells series count
+
 // Mode Inputs
 const double numRainbow = 2.0;                         // number of full rainbows distributed in stripLength
 const int seed = 0;                                    // starting pixel of Colorwipe Pattern
