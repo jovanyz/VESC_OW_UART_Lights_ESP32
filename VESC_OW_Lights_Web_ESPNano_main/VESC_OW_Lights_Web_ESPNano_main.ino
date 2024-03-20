@@ -247,32 +247,32 @@ class NeoPatterns : public Adafruit_NeoPixel
       Index = 0;
     }
 
-    void StandardUpdate()
+   void StandardUpdate()
     { 
-      if(rpmHist[0] * rpmHist[1] <= 0.0 && dirFaded){        // detects direction flip, checks two steps back into history in case "0" is captured
+      if(dirFaded && rpmHist[0] * rpmHist[1] < 0.0){        // detects direction flip, checks two steps back into history in case "0" is captured
         dirFaded = false;                                     // flag for fading
-        if (rpmHist[0] < 0.0 || rpmHist[1] < 0.0){
+        if (rpmHist[0] < 0.0){
           fadeDir = -1;                                       // set reversing
         }
-        else{
+        else if (rpmHist[0] > 0.0){
           fadeDir = 1;                                        // set forward
         } 
-      } else if(dirFaded && dirSet == 1 && rpmHist[0] < 0){   // if fade completed but current direction is wrong 
+      } else if(dirFaded && dirSet == 1 && rpmHist[0] < 0.0){   // if fade completed but current direction is wrong 
         dirFaded = false;                                     // flag for fade again
         fadeDir = -1;                                         // correct the direction
         dirSet = 0;                                           // set direction check idle 
-      } else if(dirFaded && dirSet == -1 && rpmHist[0] > 0){  
+      } else if(dirFaded && dirSet == -1 && rpmHist[0] > 0.0){  
         dirFaded = false;
         fadeDir = 1;
         dirSet = 0;
-      } else if(rpmHist[0] > 0 && dirFaded){                  // if forward & fade is correct 
+      } else if(dirFaded && rpmHist[0] > 0.0){                  // if forward & fade is correct 
         for(int i = 0; i < breakPoint; i++){                   // set nose color
           setPixelColorIdleDim(i, DimColor(Color(cmdArr[2], cmdArr[3], cmdArr[4]), cmdArr[5]));
         } 
         for(int i = breakPoint; i < numPixels(); i++){          // set tail red, brightness scaled to rpm
           setPixelColorIdleDim(i, Color(min(15.0 + 125.0 * pow(fabs(rpmHist[0]) / 6000.0, 2.0) , 255.0), 0, 0));
         } 
-      } else if(rpmHist[0] < 0 && dirFaded){                    // if backward & fade is correct
+      } else if(dirFaded && rpmHist[0] < 0.0){                    // if backward & fade is correct
         for(int i = breakPoint; i < numPixels(); i++){          // set tail to color
           setPixelColorIdleDim(i, DimColor(Color(cmdArr[2], cmdArr[3], cmdArr[4]), cmdArr[5]));
         } 
