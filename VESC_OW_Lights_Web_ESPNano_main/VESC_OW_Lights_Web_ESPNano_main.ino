@@ -7,7 +7,7 @@
 #include <WiFiClient.h>
 #include <WiFi.h>
 #include <Adafruit_NeoPixel.h>
-//#include <VescUart.h>
+
 #include "./src/VescUart/src/VescUart.h"
 VescUart vesc;
 
