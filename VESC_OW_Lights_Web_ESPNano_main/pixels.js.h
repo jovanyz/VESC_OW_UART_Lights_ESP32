@@ -5,6 +5,7 @@ const char* pixels_js = R"=====(
 var mode = "";
 var onoff = false;
 var ota = false; 
+var ble = false;
 
 $(() => {
 
@@ -91,6 +92,19 @@ function ota_toggle() {
     }
 }
 
+function ble_toggle() {
+    if (ble == true) {
+        ble = false;
+        $("#blebutton").removeClass('ble-selected');
+        $("#blebutton").addClass('ble-not-selected');
+    }
+    else {
+        ble = true;
+        $("#blebutton").removeClass('ble-not-selected');
+        $("#blebutton").addClass('ble-selected');
+    }
+}
+
 function apply() {
     // Read each of the values and create the url
     // mode is in variable mode
@@ -108,7 +122,12 @@ function apply() {
     if (ota == true) {
         ota_str = 1;
     }
-    url_string = "/set?mode="+mode+"&brightness="+brightness+"&onoff="+onoff_str+"&pickedcolor="+picked_color+"&ota="+ota_str;
+    //ble
+    ble_str = 0;
+    if (ble == true) {
+        ble_str = 1;
+    }
+    url_string = "/set?mode="+mode+"&brightness="+brightness+"&onoff="+onoff_str+"&pickedcolor="+picked_color+"&ota="+ota_str+"&ble="+ble_str;
     $.get( url_string, function (data) {
         $("#status").html(data);
     });

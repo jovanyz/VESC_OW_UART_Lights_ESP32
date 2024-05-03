@@ -8,13 +8,13 @@ struct mode {
         char * mode_name;            // Lower case - no spaces 
         char * title;               // Value to show to user
         char * description;         // Tool tip (if applicable)
-        int group;                  // Group together sequences (allows some to be excluded) 0 = basic, 1 = common, 2 = waves, 3 = particle effects, 4 = special
+        int group;                  // Group together sequences (allows some to be excluded) 0 = basic, 1 = common (some chasers etc.), 2 = extra, 4 = rare
         pfnSequence seqFunction;    // ptr to function
 };
 
 
 // define all sequences here. All these parameters are required even if the sequence doesn't use them (eg. allOff does not use colors or num_colors)
-long Default(long mode_position);
+long Default (long mode_position);
 long Rainbow(long mode_position);
 long ColorWipe(long mode_position);
 long ColorFade(long mode_position);

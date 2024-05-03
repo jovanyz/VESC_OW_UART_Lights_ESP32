@@ -61,11 +61,11 @@ ul ul ul { margin: 0;}
 
 
 #divapplybuttons {
-    background-color: #6666ff;
+    background-color: #444444;
 }
 
 #applybutton {
-    background-color: #ffddcc;
+    background-color: #ccff55;
     border: none;
     padding: 15px;
     text-align: center;
@@ -73,19 +73,7 @@ ul ul ul { margin: 0;}
     margin: 10px;
     cursor: pointer;
     width:  150px;
-    height: 75px;
-}
-
-#otabutton {
-    border: none;
-    padding: 15px;
-    text-align: center;
-    font-size: 16pt;
-    margin: 10px;
-    cursor: pointer;
-    width:  110px;
-    height: 75px;
-    border-radius: 45%;
+    height: 90px;
 }
 
 #onoffbutton {
@@ -95,8 +83,32 @@ ul ul ul { margin: 0;}
     font-size: 16pt;
     margin: 10px;
     cursor: pointer;
-    width:  110px;
-    height: 75px;
+    width:  120px;
+    height: 90px;
+    border-radius: 45%;
+}
+
+#otabutton {
+    border: none;
+    padding: 15px;
+    text-align: center;
+    font-size: 16pt;
+    margin: 10px;
+    cursor: pointer;
+    width:  120px;
+    height: 90px;
+    border-radius: 45%;
+}
+
+#blebutton {
+    border: none;
+    padding: 15px;
+    text-align: center;
+    font-size: 16pt;
+    margin: 10px;
+    cursor: pointer;
+    width:  120px;
+    height: 90px;
     border-radius: 45%;
 }
 
@@ -136,11 +148,15 @@ ul ul ul { margin: 0;}
 }
 
 .onoff-selected {
-    background: #aaaaaa;
+    background-color: #aaaaaa;
 }
 
 .ota-selected {
-    background: #aaaaaa;
+    background-color: #ff4444;
+}
+
+.ble-selected {
+    background-color: #4444ff;
 }
 
 .onoff-not-selected {
@@ -148,7 +164,11 @@ ul ul ul { margin: 0;}
 }
 
 .ota-not-selected {
-    background-color: #ffffff;
+    background-color: #ffaaaa;
+}
+
+.ble-not-selected {
+    background-color: #aaaaff;
 }
 
 input[type="color"] {
